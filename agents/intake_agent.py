@@ -55,6 +55,21 @@ def _normalize_type(series):
     return normalized.fillna('Debit')
 
 
+def _extract_balance(df: pd.DataFrame):
+    """Pull the most recent balance from a Balance column if present."""
+    if 'Balance' not in df.columns:
+        return None
+    if 'Date' in df.columns:
+        sorted_df = df.sort_values('Date', ascending=False)
+    else:
+        sorted_df = df
+    vals = pd.to_numeric(
+        sorted_df['Balance'].astype(str).str.replace(',', '', regex=False),
+        errors='coerce'
+    ).dropna()
+    return round(float(vals.iloc[0]), 2) if not vals.empty else None
+
+
 def parse_account(path: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(path, skiprows=0)
@@ -150,6 +165,9 @@ def run_intake(file_map: dict) -> dict:
             summary[f'{acct_type}_outflow'] = round(debits, 2)
             summary[f'{acct_type}_net']     = round(credits - debits, 2)
             summary[f'{acct_type}_df']      = df
+            balance = _extract_balance(df)
+            if balance is not None:
+                summary[f'{acct_type}_balance'] = balance
             update_date_range(df)
 
     if 'credit_card' in file_map:

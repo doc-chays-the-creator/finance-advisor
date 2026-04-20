@@ -171,9 +171,9 @@
         /* ── DASHBOARD ── */
         .dashboard {
             display: none;
-            grid-template-columns: 1fr 1fr;
+            flex-direction: column;
             gap: 24px;
-            padding: 40px;
+            padding: 32px 40px;
             max-width: 1200px;
             margin: 0 auto;
         }
@@ -193,19 +193,78 @@
             font-weight: 700;
         }
         .card p { color: #1a1a2e; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 
-        /* budget card special layout */
-        .budget-card { grid-column: span 1; }
+        /* ── CASH OVERVIEW ── */
+        .cash-total {
+            font-size: 42px;
+            font-weight: 800;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+        .cash-label { font-size: 13px; color: #74acdf; margin-bottom: 20px; }
+        .balance-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .balance-tile {
+            background: #f8fbff;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 150px;
+            position: relative;
+        }
+        .balance-tile.liability { background: #fff8f8; }
+        .balance-tile .tile-label { font-size: 11px; color: #74acdf; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .balance-tile .tile-amount {
+            font-size: 22px;
+            font-weight: 800;
+            color: #1a1a2e;
+            cursor: pointer;
+            border-bottom: 2px dashed transparent;
+            transition: border-color 0.15s;
+            display: inline-block;
+        }
+        .balance-tile .tile-amount:hover { border-color: #74acdf; }
+        .balance-tile .tile-amount.editing { display: none; }
+        .balance-tile input.tile-input {
+            font-size: 22px;
+            font-weight: 800;
+            color: #1a1a2e;
+            border: 2px solid #74acdf;
+            border-radius: 6px;
+            width: 130px;
+            padding: 2px 6px;
+            outline: none;
+        }
+        .balance-tile .tile-hint { font-size: 11px; color: #aaa; margin-top: 4px; }
+        .add-tile-btn {
+            background: #fff;
+            border: 2px dashed #74acdf;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 130px;
+            color: #74acdf;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .add-tile-btn:hover { background: #e8f4fc; }
+
+        /* ── SPENDING ── */
         .budget-inner {
             display: flex;
             gap: 24px;
             align-items: flex-start;
         }
-        .pie-wrapper {
-            flex: 0 0 180px;
-            height: 180px;
-            position: relative;
-        }
+        .pie-wrapper { flex: 0 0 180px; height: 180px; }
         .budget-legend { flex: 1; }
         .legend-item {
             display: flex;
@@ -215,11 +274,7 @@
             font-size: 13px;
             color: #1a1a2e;
         }
-        .legend-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .legend-item .cat-name { font-weight: 600; flex: 1; }
         .legend-item .cat-pct  { color: #74acdf; font-weight: 700; font-size: 13px; }
         .budget-summary {
@@ -231,7 +286,7 @@
             padding-top: 12px;
         }
 
-        /* new session button */
+        /* ── SESSION BAR ── */
         .new-session-bar {
             display: none;
             text-align: center;
@@ -263,19 +318,14 @@
         }
         .export-btn:hover { background: #fffbf0; }
 
-        /* comparison card */
-        .comparison-card { grid-column: span 2; }
+        /* ── COMPARISON ── */
         .comparison-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 16px;
             margin-top: 4px;
         }
-        .comp-item {
-            background: #f8fbff;
-            border-radius: 10px;
-            padding: 14px 16px;
-        }
+        .comp-item { background: #f8fbff; border-radius: 10px; padding: 14px 16px; }
         .comp-item .comp-label { font-size: 12px; color: #74acdf; font-weight: 600; margin-bottom: 4px; }
         .comp-item .comp-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
         .comp-item .comp-delta { font-size: 12px; margin-top: 4px; font-weight: 600; }
@@ -343,44 +393,55 @@
 </div>
 
 <!-- STEP 3: Dashboard -->
-<div class="new-session-bar" id="new-session-bar" style="display:none; text-align:center; padding:16px; display:none;">
+<div class="new-session-bar" id="new-session-bar">
     <button class="new-session-btn" onclick="resetToUpload()">↑ Upload New Statements</button>
     <button class="export-btn" onclick="exportResults()">↓ Export JSON</button>
 </div>
 
 <div class="dashboard" id="dashboard">
-    <div class="card comparison-card" id="comparison-card" style="display:none;">
+
+    <!-- SECTION 1: CASH -->
+    <div class="card" id="cash-card">
+        <h3>Your Liquid Cash</h3>
+        <div class="cash-total" id="cash-total">$0</div>
+        <div class="cash-label">checking + savings · click any number to edit</div>
+        <div class="balance-row" id="balance-row"></div>
+    </div>
+
+    <!-- SECTION 2: SPENDING + TREND -->
+    <div class="two-col">
+        <div class="card">
+            <h3>What Am I Spending On?</h3>
+            <div class="budget-inner">
+                <div class="pie-wrapper"><canvas id="budget-pie"></canvas></div>
+                <div class="budget-legend" id="budget-legend"></div>
+            </div>
+            <div class="budget-summary" id="budget-summary"></div>
+        </div>
+        <div class="card" id="trend-card" style="display:none;">
+            <h3>Monthly Spending Trend</h3>
+            <div style="height: 220px;"><canvas id="trend-chart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- SECTION 3: AI INSIGHTS -->
+    <div class="two-col">
+        <div class="card">
+            <h3>Investment Analysis</h3>
+            <p id="investments"></p>
+        </div>
+        <div class="card">
+            <h3>Action Items</h3>
+            <p id="actions"></p>
+        </div>
+    </div>
+
+    <!-- SECTION 4: VS LAST SESSION -->
+    <div class="card" id="comparison-card" style="display:none;">
         <h3>vs. Last Session</h3>
         <div class="comparison-grid" id="comparison-grid"></div>
     </div>
-    <div class="card">
-        <h3>Net Worth Snapshot</h3>
-        <p id="net-worth"></p>
-    </div>
-    <div class="card budget-card">
-        <h3>Budget & Spending Analysis</h3>
-        <div class="budget-inner">
-            <div class="pie-wrapper">
-                <canvas id="budget-pie"></canvas>
-            </div>
-            <div class="budget-legend" id="budget-legend"></div>
-        </div>
-        <div class="budget-summary" id="budget-summary"></div>
-    </div>
-    <div class="card">
-        <h3>Investment Recommendations</h3>
-        <p id="investments"></p>
-    </div>
-    <div class="card">
-        <h3>Action Items</h3>
-        <p id="actions"></p>
-    </div>
-    <div class="card" id="trend-card" style="display:none; grid-column: span 2;">
-        <h3>Monthly Spending Trend</h3>
-        <div style="height: 220px;">
-            <canvas id="trend-chart"></canvas>
-        </div>
-    </div>
+
 </div>
 
 <script>
@@ -391,6 +452,7 @@
     let trendChartInstance = null;
     let currentDateRange = null;
     let lastExportData = null;
+    let currentBalances = {};  // {id: amount} for live cash total
 
     const PIE_COLORS = [
         '#74acdf', '#f6b40e', '#5a96cc', '#e8a020',
@@ -436,6 +498,7 @@
             currentSessionId = data.session_id;
             questionData = data.questions;
             currentDateRange = data.date_range || null;
+            currentBalances = buildInitialBalances(data.balances || {});
 
             const subtitle = document.getElementById('questions-subtitle');
             if (data.date_range) {
@@ -525,6 +588,13 @@
             }
 
             lastExportData = data;
+            // Merge server balances into currentBalances (preserves any user edits from questions step)
+            if (data.balances) {
+                const fresh = buildInitialBalances(data.balances);
+                Object.entries(fresh).forEach(([id, tile]) => {
+                    if (!currentBalances[id]) currentBalances[id] = tile;
+                });
+            }
             renderDashboard(data.current);
             renderComparison(data.current, data.previous);
             show('dashboard');
@@ -552,38 +622,107 @@
         return answers;
     }
 
+    // ── Cash tile helpers ──
+    function buildInitialBalances(serverBalances) {
+        const tiles = {};
+        if (serverBalances.checking != null)
+            tiles['checking'] = { label: 'Checking', amount: serverBalances.checking, hint: 'from your CSV', liquid: true };
+        if (serverBalances.savings != null)
+            tiles['savings']  = { label: 'Savings',  amount: serverBalances.savings,  hint: 'from your CSV', liquid: true };
+        if (serverBalances.credit_card_net_spend != null)
+            tiles['credit_card'] = { label: 'Credit Card (net spend)', amount: -serverBalances.credit_card_net_spend, hint: 'charges minus payments · edit for actual balance', liquid: false };
+        return tiles;
+    }
+
+    function updateCashTotal() {
+        const total = Object.values(currentBalances).reduce((sum, t) => sum + (t.amount || 0), 0);
+        const el = document.getElementById('cash-total');
+        el.textContent = (total < 0 ? '−' : '') + '$' + Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        el.style.color = total >= 0 ? '#1a1a2e' : '#e05252';
+    }
+
+    function fmt(n) {
+        return (n < 0 ? '−' : '') + '$' + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderCashSection() {
+        const row = document.getElementById('balance-row');
+        row.innerHTML = '';
+        const ids = Object.keys(currentBalances);
+        ids.forEach((id, idx) => {
+            const tile = currentBalances[id];
+            const div = document.createElement('div');
+            div.className = 'balance-tile' + (tile.amount < 0 ? ' liability' : '');
+            div.id = 'tile-' + id;
+            div.innerHTML = `
+                <div class="tile-label">${tile.label}</div>
+                <div class="tile-amount" id="amt-${id}" onclick="startEdit('${id}')">${fmt(tile.amount)}</div>
+                <input class="tile-input" id="inp-${id}" type="number" step="0.01"
+                    onblur="finishEdit('${id}')" onkeydown="if(event.key==='Enter')finishEdit('${id}')" style="display:none;">
+                <div class="tile-hint" id="hint-${id}">${tile.hint}</div>
+            `;
+            row.appendChild(div);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-tile-btn';
+        addBtn.textContent = '+ Add Account';
+        addBtn.onclick = addManualTile;
+        row.appendChild(addBtn);
+        updateCashTotal();
+    }
+
+    function startEdit(id) {
+        document.getElementById('amt-' + id).style.display = 'none';
+        const inp = document.getElementById('inp-' + id);
+        inp.value = currentBalances[id].amount;
+        inp.style.display = '';
+        inp.focus(); inp.select();
+    }
+
+    function finishEdit(id) {
+        const inp = document.getElementById('inp-' + id);
+        const val = parseFloat(inp.value);
+        if (!isNaN(val)) {
+            currentBalances[id].amount = val;
+            document.getElementById('amt-' + id).textContent = fmt(val);
+            document.getElementById('hint-' + id).textContent = 'manually set';
+            document.getElementById('tile-' + id).className = 'balance-tile' + (val < 0 ? ' liability' : '');
+        }
+        inp.style.display = 'none';
+        document.getElementById('amt-' + id).style.display = '';
+        updateCashTotal();
+    }
+
+    let manualCount = 0;
+    function addManualTile() {
+        const label = prompt('Account name (e.g. Schwab Brokerage):');
+        if (!label) return;
+        const amt = parseFloat(prompt(`Balance for "${label}":`));
+        if (isNaN(amt)) return;
+        manualCount++;
+        currentBalances['manual_' + manualCount] = { label, amount: amt, hint: 'manually added', liquid: true };
+        renderCashSection();
+    }
+
     // ── Render Dashboard ──
     function renderDashboard(data) {
-        // Date range in header
         if (currentDateRange) {
             document.getElementById('header-subtitle').textContent =
                 `Analysis period: ${currentDateRange.start} – ${currentDateRange.end}`;
         }
 
-        // Net worth
-        document.getElementById('net-worth').textContent =
-            typeof data.net_worth === 'string' ? data.net_worth : JSON.stringify(data.net_worth, null, 2);
-
-        // Budget — pie chart + legend
+        renderCashSection();
         renderBudgetChart(data.budget);
-
-        // Investments
-        const inv = data.investments;
-        document.getElementById('investments').textContent =
-            typeof inv === 'string' ? inv : JSON.stringify(inv, null, 2);
-
-        // Trend chart
         renderTrendChart(data.chart_data);
 
-        // Actions
-        const actions = data.actions;
+        document.getElementById('investments').textContent =
+            typeof data.investments === 'string' ? data.investments : JSON.stringify(data.investments, null, 2);
+
         let actionsText = '';
-        if (Array.isArray(actions)) {
-            actions.forEach(item => {
-                actionsText += `${item.priority}. ${item.action}\n\n`;
-            });
+        if (Array.isArray(data.actions)) {
+            data.actions.forEach(item => { actionsText += `${item.priority}. ${item.action}\n\n`; });
         } else {
-            actionsText = JSON.stringify(actions, null, 2);
+            actionsText = JSON.stringify(data.actions, null, 2);
         }
         document.getElementById('actions').textContent = actionsText.trim();
     }
@@ -848,7 +987,7 @@
             if (el) el.style.display = 'none';
         });
         const target = document.getElementById(id);
-        if (target) target.style.display = id === 'dashboard' ? 'grid' : 'block';
+        if (target) target.style.display = id === 'dashboard' ? 'flex' : 'block';
     }
 
     function setLoadingText(text) {
@@ -860,6 +999,8 @@
         questionData = [];
         currentDateRange = null;
         lastExportData = null;
+        currentBalances = {};
+        manualCount = 0;
         // Clear all slots
         for (const key of Object.keys(slotFiles)) {
             slotFiles[key] = null;

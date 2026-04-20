@@ -53,16 +53,28 @@ def upload():
     session_id = str(uuid.uuid4())
     _temp_summaries[session_id] = {
         "summary": summary,
-        "filenames": filenames
+        "filenames": filenames,
+        "balances": balances
     }
 
     # Generate smart questions from Claude based on the data
     questions = generate_questions(summary)
 
+    balances = {
+        "checking":              summary.get("checking_balance"),
+        "savings":               summary.get("savings_balance"),
+        "credit_card_charges":   summary.get("credit_card_charges"),
+        "credit_card_payments":  summary.get("credit_card_payments"),
+        "credit_card_net_spend": summary.get("credit_card_net_spend")
+    }
+
+    _temp_summaries[session_id]["balances"] = balances
+
     return jsonify({
         "session_id": session_id,
         "questions": questions,
-        "date_range": summary.get("date_range")
+        "date_range": summary.get("date_range"),
+        "balances": balances
     })
 
 
@@ -78,9 +90,10 @@ def submit_answers():
     if not session_id or session_id not in _temp_summaries:
         return jsonify({"error": "Session expired or invalid. Please re-upload your files."}), 400
 
-    stored = _temp_summaries.pop(session_id)  # Remove after use
+    stored = _temp_summaries.pop(session_id)
     summary = stored["summary"]
     filenames = stored["filenames"]
+    balances = stored.get("balances", {})
 
     # Save answers to persistent memory
     save_profile(answers)
@@ -98,7 +111,7 @@ def submit_answers():
     date_range = summary.get("date_range")
     save_analysis(result, filenames, date_range=date_range)
 
-    return jsonify({"current": result, "previous": previous})
+    return jsonify({"current": result, "previous": previous, "balances": balances})
 
 
 if __name__ == '__main__':
