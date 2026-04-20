@@ -23,33 +23,64 @@
 
         /* ── UPLOAD ── */
         .upload-section {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 60px 40px;
+            padding: 48px 40px;
+            max-width: 900px;
+            margin: 0 auto;
         }
-        .upload-box {
-            background: #ffffff;
+        .upload-section h2 {
+            font-size: 20px;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+        }
+        .upload-section .upload-subtitle {
+            color: #74acdf;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+        .upload-slot {
             border: 2px dashed #74acdf;
-            border-radius: 16px;
-            padding: 60px 80px;
+            border-radius: 14px;
+            padding: 28px 20px;
             text-align: center;
-        }
-        .upload-box:hover { border-color: #f6b40e; }
-        .upload-box h2 { font-size: 20px; margin-bottom: 8px; color: #1a1a2e; }
-        .upload-box p  { color: #74acdf; font-size: 14px; margin-bottom: 24px; }
-        .upload-btn {
-            background: #74acdf;
-            color: #ffffff;
-            padding: 12px 32px;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
+            transition: border-color 0.2s, background 0.2s;
             cursor: pointer;
-            display: inline-block;
+            position: relative;
         }
-        .upload-btn:hover { background: #5a96cc; }
-        #file-input { display: none; }
+        .upload-slot:hover   { border-color: #f6b40e; background: #fffdf5; }
+        .upload-slot.has-file { border-color: #3ab57a; border-style: solid; background: #f4fff9; }
+        .upload-slot .slot-icon { font-size: 26px; margin-bottom: 8px; }
+        .upload-slot .slot-label { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+        .upload-slot .slot-hint  { font-size: 12px; color: #74acdf; }
+        .upload-slot .slot-filename {
+            font-size: 12px;
+            color: #3ab57a;
+            font-weight: 600;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+        .upload-slot input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .run-btn {
+            background: #f6b40e;
+            color: #1a1a2e;
+            border: none;
+            padding: 14px 48px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: none;
+            transition: background 0.2s;
+        }
+        .run-btn:hover { background: #e0a20c; }
+        .run-btn.visible { display: inline-block; }
 
         /* ── LOADING ── */
         .loading { display: none; text-align: center; padding: 60px; }
@@ -262,12 +293,39 @@
 
 <!-- STEP 1: Upload -->
 <div class="upload-section" id="upload-section">
-    <div class="upload-box">
-        <h2>Upload your bank statements</h2>
-        <p>CSV format · Hold Ctrl to select multiple files</p>
-        <label for="file-input" class="upload-btn">Choose Files</label>
-        <input type="file" id="file-input" accept=".csv" multiple onchange="handleUpload(this)">
+    <h2>Upload your statements</h2>
+    <p class="upload-subtitle">CSV format · Drop each file into the correct account slot</p>
+    <div class="upload-grid">
+        <div class="upload-slot" id="slot-checking">
+            <div class="slot-icon">🏦</div>
+            <div class="slot-label">Checking</div>
+            <div class="slot-hint">Bank checking account</div>
+            <div class="slot-filename" id="name-checking"></div>
+            <input type="file" accept=".csv" onchange="handleSlot(this, 'checking')">
+        </div>
+        <div class="upload-slot" id="slot-savings">
+            <div class="slot-icon">💰</div>
+            <div class="slot-label">Savings</div>
+            <div class="slot-hint">Savings or HYSA</div>
+            <div class="slot-filename" id="name-savings"></div>
+            <input type="file" accept=".csv" onchange="handleSlot(this, 'savings')">
+        </div>
+        <div class="upload-slot" id="slot-credit_card">
+            <div class="slot-icon">💳</div>
+            <div class="slot-label">Credit Card</div>
+            <div class="slot-hint">Discover, Visa, Amex, etc.</div>
+            <div class="slot-filename" id="name-credit_card"></div>
+            <input type="file" accept=".csv" onchange="handleSlot(this, 'credit_card')">
+        </div>
+        <div class="upload-slot" id="slot-investments">
+            <div class="slot-icon">📈</div>
+            <div class="slot-label">Investments</div>
+            <div class="slot-hint">Schwab, Fidelity, Robinhood</div>
+            <div class="slot-filename" id="name-investments"></div>
+            <input type="file" accept=".csv" onchange="handleSlot(this, 'investments')">
+        </div>
     </div>
+    <button class="run-btn" id="run-btn" onclick="handleUpload()">Analyze →</button>
 </div>
 
 <!-- LOADING (reused for both steps) -->
@@ -340,17 +398,29 @@
         '#1a5a8a', '#a86506'
     ];
 
-    // ── Step 1: Upload ──
-    async function handleUpload(input) {
-        const files = input.files;
-        if (!files || files.length === 0) return;
+    // ── Step 1: Upload slots ──
+    const slotFiles = { checking: null, savings: null, credit_card: null, investments: null };
+
+    function handleSlot(input, accountType) {
+        const file = input.files[0];
+        if (!file) return;
+        slotFiles[accountType] = file;
+        document.getElementById('slot-' + accountType).classList.add('has-file');
+        document.getElementById('name-' + accountType).textContent = file.name;
+        const anyLoaded = Object.values(slotFiles).some(f => f !== null);
+        document.getElementById('run-btn').classList.toggle('visible', anyLoaded);
+    }
+
+    async function handleUpload() {
+        const anyLoaded = Object.values(slotFiles).some(f => f !== null);
+        if (!anyLoaded) return;
 
         show('loading');
         setLoadingText('Reading your statements...');
 
         const formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-            formData.append('file', files[i]);
+        for (const [accountType, file] of Object.entries(slotFiles)) {
+            if (file) formData.append(accountType, file);
         }
 
         try {
@@ -790,7 +860,18 @@
         questionData = [];
         currentDateRange = null;
         lastExportData = null;
-        document.getElementById('file-input').value = '';
+        // Clear all slots
+        for (const key of Object.keys(slotFiles)) {
+            slotFiles[key] = null;
+            const slot = document.getElementById('slot-' + key);
+            if (slot) {
+                slot.classList.remove('has-file');
+                slot.querySelector('input[type="file"]').value = '';
+            }
+            const nameEl = document.getElementById('name-' + key);
+            if (nameEl) nameEl.textContent = '';
+        }
+        document.getElementById('run-btn').classList.remove('visible');
         document.getElementById('new-session-bar').style.display = 'none';
         document.getElementById('header-subtitle').textContent = 'AI-powered personal finance analysis';
         document.getElementById('comparison-card').style.display = 'none';

@@ -26,26 +26,26 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     """
-    Step 1: Receive CSV files, run intake parsing, generate clarifying questions.
-    Returns questions for the user to answer before full analysis runs.
+    Step 1: Receive labeled CSV files, run intake parsing, generate clarifying questions.
+    Accepts named fields: checking, savings, credit_card, investments.
     """
-    files = request.files.getlist('file')
-    if not files:
-        return jsonify({"error": "No files uploaded"}), 400
-
-    # Save uploaded files
-    filepaths = []
+    file_map = {}
     filenames = []
-    for f in files:
-        filename = f.filename
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        f.save(filepath)
-        filepaths.append(filepath)
-        filenames.append(filename)
+
+    for account_type in ['checking', 'savings', 'credit_card', 'investments']:
+        f = request.files.get(account_type)
+        if f and f.filename:
+            filepath = os.path.join(UPLOAD_FOLDER, f.filename)
+            f.save(filepath)
+            file_map[account_type] = filepath
+            filenames.append(f.filename)
+
+    if not file_map:
+        return jsonify({"error": "No files uploaded"}), 400
 
     # Run intake parsing
     try:
-        summary = run_intake(filepaths)
+        summary = run_intake(file_map)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 

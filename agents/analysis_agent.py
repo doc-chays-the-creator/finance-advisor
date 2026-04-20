@@ -6,9 +6,27 @@ def run_analysis(summary: dict, profile_context: str = "") -> dict:
 
     data_context = ""
 
-    if 'checking_df' in summary:
-        df = summary['checking_df']
-        category_spending = (
+    for acct_type, label in [('checking', 'CHECKING'), ('savings', 'SAVINGS')]:
+        if f'{acct_type}_df' in summary:
+            df = summary[f'{acct_type}_df']
+            cat_spending = (
+                df[df['Type'] == 'Debit']
+                .groupby('Category')['Amount']
+                .sum()
+                .sort_values(ascending=False)
+                .round(2)
+                .to_dict()
+            ) if 'Category' in df.columns else {}
+            data_context += f"{label} ACCOUNT\n"
+            data_context += f"Inflow: ${summary.get(f'{acct_type}_inflow', 0)}\n"
+            data_context += f"Outflow: ${summary.get(f'{acct_type}_outflow', 0)}\n"
+            data_context += f"Net: ${summary.get(f'{acct_type}_net', 0)}\n"
+            if cat_spending:
+                data_context += f"Spending by Category: {json.dumps(cat_spending, indent=2)}\n\n"
+
+    if 'credit_card_df' in summary:
+        df = summary['credit_card_df']
+        cc_cats = (
             df[df['Type'] == 'Debit']
             .groupby('Category')['Amount']
             .sum()
@@ -16,27 +34,11 @@ def run_analysis(summary: dict, profile_context: str = "") -> dict:
             .round(2)
             .to_dict()
         ) if 'Category' in df.columns else {}
-
-        data_context += "CHECKING ACCOUNT\n"
-        data_context += f"Total Inflow: ${summary.get('checking_inflow', 0)}\n"
-        data_context += f"Total Outflow: ${summary.get('checking_outflow', 0)}\n"
-        data_context += f"Net: ${summary.get('checking_net', 0)}\n"
-        if category_spending:
-            data_context += f"Spending by Category: {json.dumps(category_spending, indent=2)}\n\n"
-
-    if 'credit_card_df' in summary:
-        df = summary['credit_card_df']
-        cc_cats = {}
-        if 'Category' in df.columns:
-            cc_cats = (
-                df.groupby('Category')['Amount']
-                .sum()
-                .sort_values(ascending=False)
-                .round(2)
-                .to_dict()
-            )
         data_context += "CREDIT CARD\n"
-        data_context += f"Total Charged: ${summary.get('credit_card_balance', 0)}\n"
+        data_context += f"Charges this period: ${summary.get('credit_card_charges', 0)}\n"
+        data_context += f"Payments made: ${summary.get('credit_card_payments', 0)}\n"
+        data_context += f"Net spend (charges minus payments): ${summary.get('credit_card_net_spend', 0)}\n"
+        data_context += "Note: actual current balance is unknown — user should confirm separately.\n"
         if cc_cats:
             data_context += f"Spending by Category: {json.dumps(cc_cats, indent=2)}\n\n"
 
@@ -75,22 +77,19 @@ def run_analysis(summary: dict, profile_context: str = "") -> dict:
 
     # Build monthly trend data for charts (passed to frontend, not Claude)
     chart_data = {}
-    for key, acct_key in [('checking_df', 'checking'), ('credit_card_df', 'credit_card')]:
+    for key, acct_key in [('checking_df', 'checking'), ('savings_df', 'savings'), ('credit_card_df', 'credit_card')]:
         if key in summary:
             df = summary[key]
             if 'Date' in df.columns:
                 df = df.copy()
                 df['Month'] = df['Date'].dt.to_period('M').astype(str)
-                if acct_key == 'checking':
-                    monthly = (
-                        df[df['Type'] == 'Debit']
-                        .groupby('Month')['Amount']
-                        .sum()
-                        .round(2)
-                        .to_dict()
-                    )
-                else:
-                    monthly = df.groupby('Month')['Amount'].sum().round(2).to_dict()
+                monthly = (
+                    df[df['Type'] == 'Debit']
+                    .groupby('Month')['Amount']
+                    .sum()
+                    .round(2)
+                    .to_dict()
+                )
                 chart_data[acct_key + '_monthly'] = monthly
 
     # Inject user profile if it exists
