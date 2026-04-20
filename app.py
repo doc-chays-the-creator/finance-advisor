@@ -5,7 +5,7 @@ import uuid
 
 from agents.intake_agent import run_intake, generate_questions
 from agents.analysis_agent import run_analysis
-from memory.user_memory import save_profile, get_profile_context, save_analysis
+from memory.user_memory import save_profile, get_profile_context, save_analysis, get_previous_analysis
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'finance-advisor-dev-key')
@@ -88,13 +88,17 @@ def submit_answers():
     # Get full profile context (includes past sessions + current answers)
     profile_context = get_profile_context()
 
+    # Grab previous analysis before saving the new one
+    previous = get_previous_analysis()
+
     # Run full analysis
     result = run_analysis(summary, profile_context=profile_context)
 
     # Save analysis to history
-    save_analysis(result, filenames)
+    date_range = summary.get("date_range")
+    save_analysis(result, filenames, date_range=date_range)
 
-    return jsonify(result)
+    return jsonify({"current": result, "previous": previous})
 
 
 if __name__ == '__main__':

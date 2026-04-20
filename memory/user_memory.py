@@ -1,78 +1,123 @@
-"""
-user_memory.py — Persistent memory for Finance Advisor
-Stores user profiles and analysis history as JSON.
-Structure is intentionally SQLite-compatible for future migration.
-"""
-
+import sqlite3
 import json
 import os
 from datetime import datetime
 
-MEMORY_FILE = os.path.join(os.path.dirname(__file__), '..', 'memory', 'user_profile.json')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'finance_advisor.db')
 
-def _load_raw() -> dict:
-    """Load the raw JSON file. Returns empty structure if file doesn't exist."""
-    os.makedirs(os.path.dirname(MEMORY_FILE), exist_ok=True)
-    if not os.path.exists(MEMORY_FILE):
-        return {"profile": {}, "analyses": []}
-    with open(MEMORY_FILE, 'r') as f:
-        return json.load(f)
 
-def _save_raw(data: dict):
-    """Write the full data structure back to disk."""
-    os.makedirs(os.path.dirname(MEMORY_FILE), exist_ok=True)
-    with open(MEMORY_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+def _get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _init_db():
+    with _get_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS profile (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                source_files TEXT,
+                date_start TEXT,
+                date_end TEXT,
+                result TEXT
+            )
+        """)
+        conn.commit()
+
+
+_init_db()
+
 
 def save_profile(answers: dict):
-    """
-    Save or update the user's profile from their intake question answers.
-    answers: dict of {question_id: answer_value}
-    """
-    data = _load_raw()
-    data["profile"].update(answers)
-    data["profile"]["last_updated"] = datetime.now().isoformat()
-    _save_raw(data)
+    now = datetime.now().isoformat()
+    with _get_conn() as conn:
+        for key, value in answers.items():
+            conn.execute(
+                "INSERT OR REPLACE INTO profile (key, value, updated_at) VALUES (?, ?, ?)",
+                (key, json.dumps(value), now)
+            )
+        conn.execute(
+            "INSERT OR REPLACE INTO profile (key, value, updated_at) VALUES (?, ?, ?)",
+            ("last_updated", json.dumps(now), now)
+        )
+        conn.commit()
+
 
 def load_profile() -> dict:
-    """Return the stored user profile, or empty dict if none exists."""
-    return _load_raw().get("profile", {})
+    with _get_conn() as conn:
+        rows = conn.execute("SELECT key, value FROM profile").fetchall()
+    return {row["key"]: json.loads(row["value"]) for row in rows}
 
-def save_analysis(result: dict, file_names: list[str]):
-    """
-    Append a completed analysis to history with timestamp and source files.
-    result: the full analysis dict from analysis_agent
-    file_names: list of CSV filenames that were uploaded
-    """
-    data = _load_raw()
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "source_files": file_names,
-        "result": result
+
+def save_analysis(result: dict, file_names: list, date_range: dict = None):
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO analyses (timestamp, source_files, date_start, date_end, result) VALUES (?, ?, ?, ?, ?)",
+            (
+                datetime.now().isoformat(),
+                json.dumps(file_names),
+                date_range.get("start") if date_range else None,
+                date_range.get("end") if date_range else None,
+                json.dumps(result)
+            )
+        )
+        # Keep last 12 analyses
+        conn.execute("""
+            DELETE FROM analyses WHERE id NOT IN (
+                SELECT id FROM analyses ORDER BY id DESC LIMIT 12
+            )
+        """)
+        conn.commit()
+
+
+def load_analyses() -> list:
+    with _get_conn() as conn:
+        rows = conn.execute("SELECT * FROM analyses ORDER BY id DESC").fetchall()
+    return [
+        {
+            "timestamp": row["timestamp"],
+            "source_files": json.loads(row["source_files"]),
+            "date_start": row["date_start"],
+            "date_end": row["date_end"],
+            "result": json.loads(row["result"])
+        }
+        for row in rows
+    ]
+
+
+def get_previous_analysis() -> dict:
+    """Returns the most recent saved analysis, or None if no history exists."""
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT result, date_start, date_end FROM analyses ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "result": json.loads(row["result"]),
+        "date_start": row["date_start"],
+        "date_end": row["date_end"]
     }
-    data["analyses"].append(entry)
-    # Keep last 12 analyses to avoid unbounded growth
-    data["analyses"] = data["analyses"][-12:]
-    _save_raw(data)
 
-def load_analyses() -> list[dict]:
-    """Return list of past analyses, most recent first."""
-    return list(reversed(_load_raw().get("analyses", [])))
 
 def has_profile() -> bool:
-    """Quick check — does a profile exist yet?"""
     profile = load_profile()
-    return bool(profile and len(profile) > 1)  # more than just last_updated
+    return bool(profile and len(profile) > 1)
+
 
 def get_profile_context() -> str:
-    """
-    Returns a plain-text summary of the user profile for injecting into prompts.
-    This is what gets passed to analysis_agent to personalize the analysis.
-    """
     profile = load_profile()
     if not profile:
         return ""
-
     lines = ["USER PROFILE (from previous sessions):"]
     skip = {"last_updated"}
     for key, value in profile.items():

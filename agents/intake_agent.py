@@ -1,6 +1,25 @@
 import pandas as pd
 import anthropic
 import json
+import os
+
+_OVERRIDES_PATH = os.path.join(os.path.dirname(__file__), '..', 'column_overrides.json')
+
+def _load_overrides() -> dict:
+    if not os.path.exists(_OVERRIDES_PATH):
+        return {}
+    with open(_OVERRIDES_PATH, 'r') as f:
+        data = json.load(f)
+    return {k: v for k, v in data.items() if not k.startswith('_')}
+
+def _apply_overrides(df: pd.DataFrame, path: str) -> pd.DataFrame:
+    overrides = _load_overrides()
+    path_lower = path.lower()
+    for key, mapping in overrides.items():
+        if key.lower() in path_lower:
+            df = df.rename(columns={src: dst for src, dst in mapping.items() if src in df.columns})
+            break
+    return df
 
 def detect_column(df, keywords):
     for col in df.columns:
@@ -22,6 +41,9 @@ def run_intake(filepaths: list[str]) -> dict:
             raise ValueError(f"Could not read '{path}': {e}")
 
         df.columns = df.columns.str.strip().str.replace('\ufeff', '')
+
+        # Apply manual overrides before fuzzy matching
+        df = _apply_overrides(df, path)
 
         col_map = {
             'Date':        ['date', 'trans', 'post', 'transaction', 'time'],

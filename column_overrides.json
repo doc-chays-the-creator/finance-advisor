@@ -1,0 +1,9 @@
+{
+  "_readme": "Map your bank's column names to the standard names this app expects. Keys are partial filename matches (case-insensitive). Standard column names: Date, Amount, Type, Category, Description, Account.",
+  "discover": {
+    "Trans. Date": "Date",
+    "Amount": "Amount",
+    "Description": "Description",
+    "Category": "Category"
+  }
+}

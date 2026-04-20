@@ -205,6 +205,9 @@
             display: none;
             text-align: center;
             padding: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         .new-session-btn {
             background: #fff;
@@ -217,6 +220,37 @@
             cursor: pointer;
         }
         .new-session-btn:hover { background: #e8f4fc; }
+        .export-btn {
+            background: #fff;
+            border: 2px solid #f6b40e;
+            color: #f6b40e;
+            padding: 10px 28px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .export-btn:hover { background: #fffbf0; }
+
+        /* comparison card */
+        .comparison-card { grid-column: span 2; }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 4px;
+        }
+        .comp-item {
+            background: #f8fbff;
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .comp-item .comp-label { font-size: 12px; color: #74acdf; font-weight: 600; margin-bottom: 4px; }
+        .comp-item .comp-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+        .comp-item .comp-delta { font-size: 12px; margin-top: 4px; font-weight: 600; }
+        .delta-up   { color: #e05252; }
+        .delta-down { color: #3ab57a; }
+        .delta-flat { color: #999; }
     </style>
 </head>
 <body>
@@ -251,11 +285,16 @@
 </div>
 
 <!-- STEP 3: Dashboard -->
-<div class="new-session-bar" id="new-session-bar">
+<div class="new-session-bar" id="new-session-bar" style="display:none; text-align:center; padding:16px; display:none;">
     <button class="new-session-btn" onclick="resetToUpload()">↑ Upload New Statements</button>
+    <button class="export-btn" onclick="exportResults()">↓ Export JSON</button>
 </div>
 
 <div class="dashboard" id="dashboard">
+    <div class="card comparison-card" id="comparison-card" style="display:none;">
+        <h3>vs. Last Session</h3>
+        <div class="comparison-grid" id="comparison-grid"></div>
+    </div>
     <div class="card">
         <h3>Net Worth Snapshot</h3>
         <p id="net-worth"></p>
@@ -283,9 +322,10 @@
 <script>
     // ── State ──
     let currentSessionId = null;
-    let questionData = [];  // [{id, question, type, options?}]
+    let questionData = [];
     let pieChartInstance = null;
     let currentDateRange = null;
+    let lastExportData = null;
 
     const PIE_COLORS = [
         '#74acdf', '#f6b40e', '#5a96cc', '#e8a020',
@@ -407,9 +447,11 @@
                 return;
             }
 
-            renderDashboard(data);
+            lastExportData = data;
+            renderDashboard(data.current);
+            renderComparison(data.current, data.previous);
             show('dashboard');
-            document.getElementById('new-session-bar').style.display = 'block';
+            document.getElementById('new-session-bar').style.display = 'flex';
 
         } catch (err) {
             console.error('Analysis error:', err);
@@ -551,6 +593,107 @@
         }
     }
 
+    // ── Comparison ──
+    function renderComparison(current, previous) {
+        const card = document.getElementById('comparison-card');
+        const grid = document.getElementById('comparison-grid');
+        grid.innerHTML = '';
+
+        if (!previous || !previous.result) {
+            card.style.display = 'none';
+            return;
+        }
+
+        const prev = previous.result;
+
+        const metrics = [];
+
+        // Total outflow
+        const curOut  = current.budget?.total_outflow;
+        const prevOut = prev.budget?.total_outflow;
+        if (curOut != null && prevOut != null) {
+            const delta = curOut - prevOut;
+            metrics.push({
+                label: 'Total Spending',
+                value: `$${curOut.toLocaleString()}`,
+                delta,
+                format: 'currency',
+                higherIsBad: true
+            });
+        }
+
+        // Per-category deltas
+        const curCats  = {};
+        const prevCats = {};
+        (current.budget?.categories || []).forEach(c => curCats[c.category]  = c.amount);
+        (prev.budget?.categories    || []).forEach(c => prevCats[c.category] = c.amount);
+
+        const allCats = new Set([...Object.keys(curCats), ...Object.keys(prevCats)]);
+        allCats.forEach(cat => {
+            const c = curCats[cat]  || 0;
+            const p = prevCats[cat] || 0;
+            if (c > 0 || p > 0) {
+                metrics.push({
+                    label: cat,
+                    value: `$${c.toLocaleString()}`,
+                    delta: c - p,
+                    format: 'currency',
+                    higherIsBad: true
+                });
+            }
+        });
+
+        if (metrics.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        metrics.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'comp-item';
+            let deltaHtml = '';
+            if (m.delta !== 0) {
+                const sign   = m.delta > 0 ? '+' : '';
+                const cls    = m.delta > 0 ? (m.higherIsBad ? 'delta-up' : 'delta-down')
+                                           : (m.higherIsBad ? 'delta-down' : 'delta-up');
+                const arrow  = m.delta > 0 ? '▲' : '▼';
+                const amount = m.format === 'currency' ? `$${Math.abs(m.delta).toLocaleString(undefined, {maximumFractionDigits: 0})}` : Math.abs(m.delta);
+                deltaHtml = `<div class="comp-delta ${cls}">${arrow} ${sign}${amount} vs last</div>`;
+            } else {
+                deltaHtml = `<div class="comp-delta delta-flat">— no change</div>`;
+            }
+            item.innerHTML = `
+                <div class="comp-label">${m.label}</div>
+                <div class="comp-value">${m.value}</div>
+                ${deltaHtml}
+            `;
+            grid.appendChild(item);
+        });
+
+        const periodLabel = previous.date_start
+            ? `Previous period: ${previous.date_start} – ${previous.date_end}`
+            : 'Compared to last session';
+        const note = document.createElement('p');
+        note.style.cssText = 'grid-column:1/-1; font-size:11px; color:#aaa; margin-top:4px;';
+        note.textContent = periodLabel;
+        grid.appendChild(note);
+
+        card.style.display = 'block';
+    }
+
+    // ── Export ──
+    function exportResults() {
+        if (!lastExportData) return;
+        const blob = new Blob([JSON.stringify(lastExportData, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const ts   = new Date().toISOString().slice(0, 10);
+        a.href     = url;
+        a.download = `finance-analysis-${ts}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     // ── Helpers ──
     function show(id) {
         const ids = ['upload-section', 'loading', 'questions-section', 'dashboard'];
@@ -570,9 +713,11 @@
         currentSessionId = null;
         questionData = [];
         currentDateRange = null;
+        lastExportData = null;
         document.getElementById('file-input').value = '';
         document.getElementById('new-session-bar').style.display = 'none';
         document.getElementById('header-subtitle').textContent = 'AI-powered personal finance analysis';
+        document.getElementById('comparison-card').style.display = 'none';
         show('upload-section');
     }
 </script>
