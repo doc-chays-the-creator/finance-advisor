@@ -317,6 +317,12 @@
         <h3>Action Items</h3>
         <p id="actions"></p>
     </div>
+    <div class="card" id="trend-card" style="display:none; grid-column: span 2;">
+        <h3>Monthly Spending Trend</h3>
+        <div style="height: 220px;">
+            <canvas id="trend-chart"></canvas>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -324,6 +330,7 @@
     let currentSessionId = null;
     let questionData = [];
     let pieChartInstance = null;
+    let trendChartInstance = null;
     let currentDateRange = null;
     let lastExportData = null;
 
@@ -495,6 +502,9 @@
         document.getElementById('investments').textContent =
             typeof inv === 'string' ? inv : JSON.stringify(inv, null, 2);
 
+        // Trend chart
+        renderTrendChart(data.chart_data);
+
         // Actions
         const actions = data.actions;
         let actionsText = '';
@@ -591,6 +601,72 @@
         if (budget.summary) {
             summary.textContent = budget.summary;
         }
+    }
+
+    // ── Trend Chart ──
+    function renderTrendChart(chartData) {
+        const card = document.getElementById('trend-card');
+        if (!chartData || (!chartData.checking_monthly && !chartData.credit_card_monthly)) {
+            card.style.display = 'none';
+            return;
+        }
+
+        // Merge all months from both sources
+        const allMonths = Array.from(new Set([
+            ...Object.keys(chartData.checking_monthly    || {}),
+            ...Object.keys(chartData.credit_card_monthly || {})
+        ])).sort();
+
+        if (allMonths.length < 2) { card.style.display = 'none'; return; }
+
+        const datasets = [];
+        if (chartData.checking_monthly) {
+            datasets.push({
+                label: 'Checking Outflow',
+                data: allMonths.map(m => chartData.checking_monthly[m] || 0),
+                borderColor: '#74acdf',
+                backgroundColor: 'rgba(116,172,223,0.12)',
+                fill: true,
+                tension: 0.35,
+                pointRadius: 4
+            });
+        }
+        if (chartData.credit_card_monthly) {
+            datasets.push({
+                label: 'Credit Card',
+                data: allMonths.map(m => chartData.credit_card_monthly[m] || 0),
+                borderColor: '#f6b40e',
+                backgroundColor: 'rgba(246,180,14,0.10)',
+                fill: true,
+                tension: 0.35,
+                pointRadius: 4
+            });
+        }
+
+        if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+
+        const ctx = document.getElementById('trend-chart').getContext('2d');
+        trendChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: allMonths, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { font: { size: 12 } } },
+                    tooltip: { callbacks: { label: ctx => ` $${ctx.parsed.y.toLocaleString()}` } }
+                },
+                scales: {
+                    y: {
+                        ticks: { callback: v => '$' + v.toLocaleString() },
+                        grid: { color: '#f0f4f8' }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        card.style.display = 'block';
     }
 
     // ── Comparison ──
@@ -718,6 +794,8 @@
         document.getElementById('new-session-bar').style.display = 'none';
         document.getElementById('header-subtitle').textContent = 'AI-powered personal finance analysis';
         document.getElementById('comparison-card').style.display = 'none';
+        document.getElementById('trend-card').style.display = 'none';
+        if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
         show('upload-section');
     }
 </script>

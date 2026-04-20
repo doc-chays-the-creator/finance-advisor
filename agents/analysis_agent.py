@@ -41,7 +41,57 @@ def run_analysis(summary: dict, profile_context: str = "") -> dict:
             data_context += f"Spending by Category: {json.dumps(cc_cats, indent=2)}\n\n"
 
     if 'investments_df' in summary:
-        data_context += "INVESTMENT ACCOUNT DETECTED\n\n"
+        inv_df = summary['investments_df']
+        data_context += "INVESTMENT ACCOUNT\n"
+
+        # Total contributions vs withdrawals
+        if 'Type' in inv_df.columns:
+            contributions = inv_df[inv_df['Type'] == 'Debit']['Amount'].sum()
+            withdrawals   = inv_df[inv_df['Type'] == 'Credit']['Amount'].sum()
+            data_context += f"Contributions: ${round(contributions, 2)}\n"
+            data_context += f"Withdrawals: ${round(withdrawals, 2)}\n"
+            data_context += f"Net invested: ${round(contributions - withdrawals, 2)}\n"
+        else:
+            net = round(inv_df['Amount'].sum(), 2)
+            data_context += f"Net activity: ${net}\n"
+
+        # Top holdings or transaction descriptions
+        if 'Description' in inv_df.columns:
+            top = inv_df['Description'].dropna().value_counts().head(8).to_dict()
+            data_context += f"Top holdings/transactions: {json.dumps(top)}\n"
+
+        # Category breakdown if available
+        if 'Category' in inv_df.columns:
+            inv_cats = (
+                inv_df.groupby('Category')['Amount']
+                .sum()
+                .sort_values(ascending=False)
+                .round(2)
+                .to_dict()
+            )
+            data_context += f"By category: {json.dumps(inv_cats)}\n"
+
+        data_context += "\n"
+
+    # Build monthly trend data for charts (passed to frontend, not Claude)
+    chart_data = {}
+    for key, acct_key in [('checking_df', 'checking'), ('credit_card_df', 'credit_card')]:
+        if key in summary:
+            df = summary[key]
+            if 'Date' in df.columns:
+                df = df.copy()
+                df['Month'] = df['Date'].dt.to_period('M').astype(str)
+                if acct_key == 'checking':
+                    monthly = (
+                        df[df['Type'] == 'Debit']
+                        .groupby('Month')['Amount']
+                        .sum()
+                        .round(2)
+                        .to_dict()
+                    )
+                else:
+                    monthly = df.groupby('Month')['Amount'].sum().round(2).to_dict()
+                chart_data[acct_key + '_monthly'] = monthly
 
     # Inject user profile if it exists
     profile_section = ""
@@ -61,7 +111,7 @@ def run_analysis(summary: dict, profile_context: str = "") -> dict:
   - "summary": 2-3 sentence overall budget summary
   - "total_outflow": total outflow number
 
-"investments": A string analyzing investment activity, consistency, and whether the pace aligns with wealth-building goals.
+"investments": A string analyzing: total contributions vs withdrawals, consistency of investing behavior, what's being invested in (if visible), whether the pace aligns with wealth-building goals, and one specific suggestion. If no investment data was provided, note that and recommend next steps.
 
 "actions": Array of objects, each with:
   - "priority": number (1 = highest)
@@ -75,7 +125,7 @@ Financial data:
 Return only valid JSON. No explanation outside the JSON."""
 
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -91,4 +141,6 @@ Return only valid JSON. No explanation outside the JSON."""
             "investments": "Unavailable.",
             "actions": [{"priority": 1, "action": "Re-upload your statements and try again."}]
         }
+
+    result["chart_data"] = chart_data
     return result
