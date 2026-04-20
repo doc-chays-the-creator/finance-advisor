@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Advisor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #ffffff;
+            color: #1a1a2e;
+            min-height: 100vh;
+        }
+        header {
+            background: #74acdf;
+            padding: 24px 40px;
+            border-bottom: 4px solid #f6b40e;
+        }
+        header h1 { font-size: 26px; color: #ffffff; font-weight: 700; }
+        header p  { color: #e8f4fc; font-size: 14px; margin-top: 4px; }
+
+        /* ── UPLOAD ── */
+        .upload-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 40px;
+        }
+        .upload-box {
+            background: #ffffff;
+            border: 2px dashed #74acdf;
+            border-radius: 16px;
+            padding: 60px 80px;
+            text-align: center;
+        }
+        .upload-box:hover { border-color: #f6b40e; }
+        .upload-box h2 { font-size: 20px; margin-bottom: 8px; color: #1a1a2e; }
+        .upload-box p  { color: #74acdf; font-size: 14px; margin-bottom: 24px; }
+        .upload-btn {
+            background: #74acdf;
+            color: #ffffff;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .upload-btn:hover { background: #5a96cc; }
+        #file-input { display: none; }
+
+        /* ── LOADING ── */
+        .loading { display: none; text-align: center; padding: 60px; }
+        .loading p { color: #74acdf; margin-top: 16px; font-size: 15px; }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid #e8f4fc;
+            border-top-color: #74acdf;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── QUESTIONS ── */
+        .questions-section {
+            display: none;
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+        .questions-section h2 {
+            font-size: 22px;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+        }
+        .questions-section .subtitle {
+            color: #74acdf;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        .question-block {
+            margin-bottom: 28px;
+        }
+        .question-block label {
+            display: block;
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .question-block input[type="text"],
+        .question-block textarea {
+            width: 100%;
+            border: 2px solid #d0e8f7;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            color: #1a1a2e;
+            outline: none;
+            transition: border-color 0.2s;
+            resize: vertical;
+        }
+        .question-block input[type="text"]:focus,
+        .question-block textarea:focus {
+            border-color: #74acdf;
+        }
+        .options-group { display: flex; flex-wrap: wrap; gap: 10px; }
+        .option-btn {
+            padding: 9px 18px;
+            border: 2px solid #d0e8f7;
+            border-radius: 8px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #1a1a2e;
+            transition: all 0.15s;
+        }
+        .option-btn:hover  { border-color: #74acdf; color: #74acdf; }
+        .option-btn.active { border-color: #74acdf; background: #74acdf; color: #fff; }
+        .analyze-btn {
+            background: #f6b40e;
+            color: #1a1a2e;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: background 0.2s;
+        }
+        .analyze-btn:hover { background: #e0a20c; }
+
+        /* ── DASHBOARD ── */
+        .dashboard {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 28px;
+            border: 2px solid #74acdf;
+            box-shadow: 0 4px 12px rgba(116, 172, 223, 0.15);
+        }
+        .card h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #f6b40e;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+        .card p { color: #1a1a2e; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+
+        /* budget card special layout */
+        .budget-card { grid-column: span 1; }
+        .budget-inner {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        .pie-wrapper {
+            flex: 0 0 180px;
+            height: 180px;
+            position: relative;
+        }
+        .budget-legend { flex: 1; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #1a1a2e;
+        }
+        .legend-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .legend-item .cat-name { font-weight: 600; flex: 1; }
+        .legend-item .cat-pct  { color: #74acdf; font-weight: 700; font-size: 13px; }
+        .budget-summary {
+            margin-top: 16px;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
+            border-top: 1px solid #e8f4fc;
+            padding-top: 12px;
+        }
+
+        /* new session button */
+        .new-session-bar {
+            display: none;
+            text-align: center;
+            padding: 16px;
+        }
+        .new-session-btn {
+            background: #fff;
+            border: 2px solid #74acdf;
+            color: #74acdf;
+            padding: 10px 28px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .new-session-btn:hover { background: #e8f4fc; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Finance Advisor</h1>
+    <p id="header-subtitle">AI-powered personal finance analysis</p>
+</header>
+
+<!-- STEP 1: Upload -->
+<div class="upload-section" id="upload-section">
+    <div class="upload-box">
+        <h2>Upload your bank statements</h2>
+        <p>CSV format · Hold Ctrl to select multiple files</p>
+        <label for="file-input" class="upload-btn">Choose Files</label>
+        <input type="file" id="file-input" accept=".csv" multiple onchange="handleUpload(this)">
+    </div>
+</div>
+
+<!-- LOADING (reused for both steps) -->
+<div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p id="loading-text">Reading your statements...</p>
+</div>
+
+<!-- STEP 2: Questions -->
+<div class="questions-section" id="questions-section">
+    <h2>A few quick questions</h2>
+    <p class="subtitle" id="questions-subtitle">Based on your data — helps us personalize the analysis</p>
+    <div id="questions-container"></div>
+    <button class="analyze-btn" onclick="submitAnswers()">Run Analysis →</button>
+</div>
+
+<!-- STEP 3: Dashboard -->
+<div class="new-session-bar" id="new-session-bar">
+    <button class="new-session-btn" onclick="resetToUpload()">↑ Upload New Statements</button>
+</div>
+
+<div class="dashboard" id="dashboard">
+    <div class="card">
+        <h3>Net Worth Snapshot</h3>
+        <p id="net-worth"></p>
+    </div>
+    <div class="card budget-card">
+        <h3>Budget & Spending Analysis</h3>
+        <div class="budget-inner">
+            <div class="pie-wrapper">
+                <canvas id="budget-pie"></canvas>
+            </div>
+            <div class="budget-legend" id="budget-legend"></div>
+        </div>
+        <div class="budget-summary" id="budget-summary"></div>
+    </div>
+    <div class="card">
+        <h3>Investment Recommendations</h3>
+        <p id="investments"></p>
+    </div>
+    <div class="card">
+        <h3>Action Items</h3>
+        <p id="actions"></p>
+    </div>
+</div>
+
+<script>
+    // ── State ──
+    let currentSessionId = null;
+    let questionData = [];  // [{id, question, type, options?}]
+    let pieChartInstance = null;
+    let currentDateRange = null;
+
+    const PIE_COLORS = [
+        '#74acdf', '#f6b40e', '#5a96cc', '#e8a020',
+        '#3d7db8', '#d4890a', '#2a6aa0', '#c07608',
+        '#1a5a8a', '#a86506'
+    ];
+
+    // ── Step 1: Upload ──
+    async function handleUpload(input) {
+        const files = input.files;
+        if (!files || files.length === 0) return;
+
+        show('loading');
+        setLoadingText('Reading your statements...');
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('file', files[i]);
+        }
+
+        try {
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                resetToUpload();
+                return;
+            }
+
+            currentSessionId = data.session_id;
+            questionData = data.questions;
+            currentDateRange = data.date_range || null;
+
+            const subtitle = document.getElementById('questions-subtitle');
+            if (data.date_range) {
+                subtitle.textContent = `Data covers ${data.date_range.start} – ${data.date_range.end}`;
+            } else {
+                subtitle.textContent = 'Based on your data — helps us personalize the analysis';
+            }
+
+            renderQuestions(data.questions);
+            show('questions-section');
+        } catch (err) {
+            console.error('Upload error:', err);
+            alert('Something went wrong during upload. Check the console.');
+            resetToUpload();
+        }
+    }
+
+    // ── Step 2: Render Questions ──
+    function renderQuestions(questions) {
+        const container = document.getElementById('questions-container');
+        container.innerHTML = '';
+
+        questions.forEach(q => {
+            const block = document.createElement('div');
+            block.className = 'question-block';
+
+            const label = document.createElement('label');
+            label.textContent = q.question;
+            block.appendChild(label);
+
+            if (q.type === 'text') {
+                const input = document.createElement('textarea');
+                input.rows = 2;
+                input.dataset.qid = q.id;
+                input.placeholder = 'Your answer...';
+                block.appendChild(input);
+
+            } else if (q.type === 'select' || q.type === 'multiselect') {
+                const group = document.createElement('div');
+                group.className = 'options-group';
+                group.dataset.qid = q.id;
+                group.dataset.type = q.type;
+
+                (q.options || []).forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn';
+                    btn.textContent = opt;
+                    btn.onclick = () => toggleOption(btn, group);
+                    group.appendChild(btn);
+                });
+                block.appendChild(group);
+            }
+
+            container.appendChild(block);
+        });
+    }
+
+    function toggleOption(btn, group) {
+        if (group.dataset.type === 'select') {
+            group.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        } else {
+            btn.classList.toggle('active');
+        }
+    }
+
+    // ── Step 3: Submit answers → run analysis ──
+    async function submitAnswers() {
+        const answers = collectAnswers();
+
+        show('loading');
+        setLoadingText('Analyzing your finances...');
+
+        try {
+            const response = await fetch('/submit-answers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: currentSessionId, answers })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                resetToUpload();
+                return;
+            }
+
+            renderDashboard(data);
+            show('dashboard');
+            document.getElementById('new-session-bar').style.display = 'block';
+
+        } catch (err) {
+            console.error('Analysis error:', err);
+            alert('Analysis failed. Check the console.');
+        }
+    }
+
+    function collectAnswers() {
+        const answers = {};
+        const container = document.getElementById('questions-container');
+
+        container.querySelectorAll('textarea[data-qid]').forEach(el => {
+            answers[el.dataset.qid] = el.value.trim();
+        });
+
+        container.querySelectorAll('.options-group[data-qid]').forEach(group => {
+            const selected = [...group.querySelectorAll('.option-btn.active')].map(b => b.textContent);
+            answers[group.dataset.qid] = group.dataset.type === 'select' ? (selected[0] || '') : selected;
+        });
+
+        return answers;
+    }
+
+    // ── Render Dashboard ──
+    function renderDashboard(data) {
+        // Date range in header
+        if (currentDateRange) {
+            document.getElementById('header-subtitle').textContent =
+                `Analysis period: ${currentDateRange.start} – ${currentDateRange.end}`;
+        }
+
+        // Net worth
+        document.getElementById('net-worth').textContent =
+            typeof data.net_worth === 'string' ? data.net_worth : JSON.stringify(data.net_worth, null, 2);
+
+        // Budget — pie chart + legend
+        renderBudgetChart(data.budget);
+
+        // Investments
+        const inv = data.investments;
+        document.getElementById('investments').textContent =
+            typeof inv === 'string' ? inv : JSON.stringify(inv, null, 2);
+
+        // Actions
+        const actions = data.actions;
+        let actionsText = '';
+        if (Array.isArray(actions)) {
+            actions.forEach(item => {
+                actionsText += `${item.priority}. ${item.action}\n\n`;
+            });
+        } else {
+            actionsText = JSON.stringify(actions, null, 2);
+        }
+        document.getElementById('actions').textContent = actionsText.trim();
+    }
+
+    function renderBudgetChart(budget) {
+        const legend = document.getElementById('budget-legend');
+        const summary = document.getElementById('budget-summary');
+        legend.innerHTML = '';
+
+        let categories = [];
+
+        if (budget && budget.categories && Array.isArray(budget.categories)) {
+            categories = budget.categories;
+        } else if (typeof budget === 'string') {
+            summary.textContent = budget;
+            return;
+        }
+
+        // Sort by amount descending, cap at 8 slices for readability
+        categories.sort((a, b) => b.amount - a.amount);
+        const display = categories.slice(0, 8);
+
+        // If there are more, bundle the rest as "Other"
+        if (categories.length > 8) {
+            const otherAmount = categories.slice(8).reduce((sum, c) => sum + c.amount, 0);
+            const totalOut = budget.total_outflow || display.reduce((s, c) => s + c.amount, 0);
+            display.push({
+                category: 'Other',
+                amount: parseFloat(otherAmount.toFixed(2)),
+                percentage: parseFloat(((otherAmount / totalOut) * 100).toFixed(1)),
+                assessment: ''
+            });
+        }
+
+        const labels = display.map(c => c.category);
+        const amounts = display.map(c => c.amount);
+        const colors  = display.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]);
+
+        // Destroy previous chart if re-rendering
+        if (pieChartInstance) {
+            pieChartInstance.destroy();
+            pieChartInstance = null;
+        }
+
+        const ctx = document.getElementById('budget-pie').getContext('2d');
+        pieChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: amounts,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` $${ctx.parsed.toLocaleString()}`
+                        }
+                    }
+                }
+            }
+        });
+
+        // Legend
+        display.forEach((cat, i) => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.innerHTML = `
+                <span class="legend-dot" style="background:${colors[i]}"></span>
+                <span class="cat-name">${cat.category}</span>
+                <span class="cat-pct">${cat.percentage != null ? cat.percentage + '%' : ''}</span>
+            `;
+            legend.appendChild(item);
+        });
+
+        // Summary text
+        if (budget.summary) {
+            summary.textContent = budget.summary;
+        }
+    }
+
+    // ── Helpers ──
+    function show(id) {
+        const ids = ['upload-section', 'loading', 'questions-section', 'dashboard'];
+        ids.forEach(i => {
+            const el = document.getElementById(i);
+            if (el) el.style.display = 'none';
+        });
+        const target = document.getElementById(id);
+        if (target) target.style.display = id === 'dashboard' ? 'grid' : 'block';
+    }
+
+    function setLoadingText(text) {
+        document.getElementById('loading-text').textContent = text;
+    }
+
+    function resetToUpload() {
+        currentSessionId = null;
+        questionData = [];
+        currentDateRange = null;
+        document.getElementById('file-input').value = '';
+        document.getElementById('new-session-bar').style.display = 'none';
+        document.getElementById('header-subtitle').textContent = 'AI-powered personal finance analysis';
+        show('upload-section');
+    }
+</script>
+
+</body>
+</html>
