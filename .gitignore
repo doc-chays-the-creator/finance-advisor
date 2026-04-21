@@ -17,6 +17,7 @@ uploads/*.CSV
 
 # Memory / local data
 memory/user_profile.json
+memory/finance_advisor.db
 
 # Environment
 .env
